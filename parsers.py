@@ -96,7 +96,7 @@ def parse_ah_recipe(recipe: AbstractScraper):
         recipeYield=int(recipe.yields().strip(" servings")),
         description=recipe.description(),
         url=recipe.schema.data.get("url", ""),
-        image=recipe.to_json()["image"],
+        image=recipe.to_json().get("image", ""),
         totalTime=recipe.schema.data.get("totalTime", ""),
         prepTime=recipe.schema.data.get("prepTime", ""),
         cookTime=recipe.schema.data.get("cookTime", ""),
@@ -104,7 +104,7 @@ def parse_ah_recipe(recipe: AbstractScraper):
         keywords=recipe.keywords() + recipe.dietary_restrictions(),
         tool=[a.string for a in apps],
         recipeIngredient=recipe.ingredients(),
-        recipeInstructions=recipe.schema.data['recipeInstructions'],
+        recipeInstructions=recipe.schema.data.get('recipeInstructions', []),
         nutrition=recipe.nutrients(),
         datePublished=recipe.schema.data.get("datePublished", "")
     )
