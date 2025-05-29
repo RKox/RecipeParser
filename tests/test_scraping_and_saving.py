@@ -3,6 +3,8 @@ from unittest.mock import patch, MagicMock, mock_open
 from pathlib import Path
 from web_to_cookbook import get_urls_from_file, get_raw_recipe, save_to_json, get_and_save_image, web_to_cookbook
 
+MOCK_PARENT_FOLDER = Path("mock_parent_folder")
+
 
 class TestWebToCookbook(unittest.TestCase):
     """
@@ -58,23 +60,23 @@ class TestWebToCookbook(unittest.TestCase):
         Tests that recipe data is saved correctly to a JSON file.
         """
         mock_recipe = MagicMock()
-        mock_recipe.folder_name = Path("/mock_folder")
+        mock_recipe.folder_name = Path("mock_folder")
         mock_recipe.to_json.return_value = {"name": "Mock Recipe"}
         with patch("web_to_cookbook.Path.open", mock_open()):
-            path = save_to_json(mock_recipe)
-            self.assertEqual(path, Path("/mock_folder/recipe.json"))
+            path = save_to_json(recipe=mock_recipe, target_folder=MOCK_PARENT_FOLDER / mock_recipe.folder_name)
+            self.assertEqual(path, Path("mock_parent_folder/mock_folder/recipe.json"))
 
     def test_downloads_and_saves_image(self):
         """
         Tests that the recipe image is downloaded and saved correctly.
         """
         mock_recipe = MagicMock()
-        mock_recipe.folder_name = Path("/mock_folder")
+        mock_recipe.folder_name = Path("mock_folder")
         mock_recipe.image = "http://example.com/image.jpg"
         with patch("web_to_cookbook.requests.get", return_value=MagicMock(content=b"image_data")), \
              patch("web_to_cookbook.Path.open", mock_open()):
-            path = get_and_save_image(mock_recipe)
-            self.assertEqual(path, Path("/mock_folder/full.jpg"))
+            path = get_and_save_image(recipe=mock_recipe, target_folder=MOCK_PARENT_FOLDER / mock_recipe.folder_name)
+            self.assertEqual(path, Path("mock_parent_folder/mock_folder/full.jpg"))
 
     def test_processes_valid_recipe_url(self):
         """
