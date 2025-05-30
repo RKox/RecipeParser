@@ -14,6 +14,7 @@ RECIPES_FOLDER = Path("parsed_recipes")  # Folder where all recipes will be save
 IMAGE_FILENAME = Path("full.jpg")  # Default filename for recipe images
 RECIPE_FILENAME = Path("recipe.json")  # Default filename for recipe JSON data
 HEADERS = {"User-Agent": "Mozilla/5.0"}  # HTTP headers for web requests
+FAILED_URLS_FILE = Path("failed_urls.txt")  # File to store failed URLs
 
 
 class RecipeToCookbook:
@@ -35,6 +36,7 @@ class RecipeToCookbook:
         self.target_folder: Path = target_folder
         self.recipes: list[RecipeForCookBook] = []
         self.failed_urls = []
+        self.success_urls = []
         self.urls_and_paths: dict[str, Path] = {}
 
         if not self.target_folder.exists():
@@ -132,8 +134,6 @@ class RecipeToCookbook:
 
         :raises ExceptionGroup: If any exceptions occur during processing.
         """
-        # TODO create file with all failed URLs (append if already exists but url not yet in file)
-        # TODO delete source files after processing
         # TODO retry a configurable amount of times the failed urls
         exceptions: list[Exception] = []
         for url in self.url_list:
@@ -144,8 +144,29 @@ class RecipeToCookbook:
                 print(f"Error processing {url}:\n{e}")
                 continue
 
+        if self.failed_urls:
+            self._update_failed_urls_file(file_path=self.target_folder / FAILED_URLS_FILE)
+
         if exceptions:
             raise ExceptionGroup(f"{len(exceptions)} exceptions raised during scraping!", exceptions)
+
+    def _update_failed_urls_file(self, file_path: Path) -> None:
+        """
+        Updates a file with the failed URLs from this session, ensuring no duplicates.
+
+        :param file_path: Path to the file where failed URLs are stored.
+        """
+        failed_urls = set()
+        if file_path.exists():
+            with file_path.open("r", encoding="utf-8") as f:
+                failed_urls.update(URLExtract().find_urls(f.read()))
+
+        # remove any URLs that were successfully processed in this run
+        failed_urls.difference_update(set(self.success_urls))
+
+        failed_urls.update(self.failed_urls)
+        with file_path.open("w", encoding="utf-8") as f:
+            f.write("\n".join(failed_urls))
 
 
 def get_urls_from_file(url_file: Path) -> list[str]:
@@ -183,3 +204,7 @@ if __name__ == "__main__":
     # Process the URLs
     recipe_to_cookbook = RecipeToCookbook(url_list=urls, target_folder=Path(args.target))
     recipe_to_cookbook.run_through_urls()
+
+    for file in args.file:
+        print(f"Removing file {file} after processing.")
+        Path(file).unlink(missing_ok=True)

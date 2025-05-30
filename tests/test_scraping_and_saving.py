@@ -1,9 +1,12 @@
 import shutil
 import unittest
 from contextlib import contextmanager
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, TemporaryFile
 from unittest.mock import patch, MagicMock, mock_open, Mock
 from pathlib import Path
+
+from pyRdfa.host import initial_contexts
+from urlextract import URLExtract
 
 from web_to_cookbook import get_urls_from_file, RecipeToCookbook
 
@@ -21,6 +24,19 @@ def temporary_directory():
             yield Path(temp_dir)
     finally:
         shutil.rmtree(MOCK_PARENT_FOLDER, ignore_errors=True)
+
+
+@contextmanager
+def temporary_file(initial_contents: str = ""):
+    """
+    Context manager to create a temporary file for testing.
+    """
+    with temporary_directory() as temp_dir:
+        temp_file = temp_dir / "temp_file.txt"
+        if initial_contents:
+            with temp_file.open("w", encoding="utf-8") as f:
+                f.write(initial_contents)
+        yield temp_file
 
 
 class TestWebToCookbook(unittest.TestCase):
@@ -151,6 +167,54 @@ class TestWebToCookbook(unittest.TestCase):
                     patch.object(rtc, "_save_to_json"), \
                     patch.object(rtc, "_get_and_save_image"):
                 rtc.web_to_cookbook("http://example.com")
+
+    def test_appends_failed_urls_to_existing_file(self):
+        """
+        Ensures that failed URLs are appended to an existing file without duplicates.
+        """
+        initial_contents = "http://example.com\nhttp://test.com\n"
+        expected_contents = "http://example.com\nhttp://test.com\nhttp://newurl.com\n"
+        with temporary_file(initial_contents=initial_contents) as tmp_file:
+            with temporary_directory() as tmp_path:
+                rtc = RecipeToCookbook(url_list=["http://example.com", "http://newurl.com"], target_folder=tmp_path)
+                rtc.failed_urls = rtc.url_list
+                rtc._update_failed_urls_file(file_path=tmp_file)
+
+                file_urls = URLExtract().find_urls(tmp_file.read_text())
+                expected_urls = URLExtract().find_urls(expected_contents)
+                assert len(file_urls) == len(expected_urls)
+                assert set(file_urls) == set(expected_urls)
+
+    def test_creates_new_file_with_failed_urls(self):
+        """
+        Ensures that a new file is created and failed URLs are written when the file does not exist.
+        """
+        failing_url = ["http://example.com", "http://newurl.com"]
+        with temporary_file() as tmp_file:
+            with temporary_directory() as tmp_path:
+                rtc = RecipeToCookbook(url_list=failing_url, target_folder=tmp_path)
+                rtc.failed_urls = failing_url
+                rtc._update_failed_urls_file(file_path=tmp_file)
+
+                file_contents = set(tmp_file.read_text().splitlines())
+                assert file_contents == set(failing_url)
+
+    def test_success_urls_in_file(self):
+        initial_contents = "http://example.com\nhttp://test.com\nhttp://success.com\n"
+        expected_contents = "http://example.com\nhttp://test.com\nhttp://newurl.com\n"
+        failing_urls = ["http://example.com", "http://newurl.com"]
+        success_urls = ["http://success.com"]
+        with temporary_file(initial_contents=initial_contents) as tmp_file:
+            with temporary_directory() as tmp_path:
+                rtc = RecipeToCookbook(url_list=failing_urls + success_urls, target_folder=tmp_path)
+                rtc.failed_urls = failing_urls
+                rtc.success_urls = success_urls
+                rtc._update_failed_urls_file(file_path=tmp_file)
+
+                file_urls = URLExtract().find_urls(tmp_file.read_text())
+                expected_urls = URLExtract().find_urls(expected_contents)
+                assert len(file_urls) == len(expected_urls)
+                assert set(file_urls) == set(expected_urls)
 
 
 if __name__ == '__main__':
