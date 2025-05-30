@@ -1,5 +1,7 @@
 import argparse
 import shutil
+import time
+import traceback
 
 import requests
 from recipe_scrapers import scrape_html, AbstractScraper
@@ -10,7 +12,7 @@ from parsers import parse_ah_recipe, RecipeForCookBook
 from urlextract import URLExtract
 
 # Constants for file paths and headers
-RECIPES_FOLDER = Path("parsed_recipes")  # Folder where all recipes will be saved (TODO: make configurable)
+RECIPES_FOLDER = Path("parsed_recipes")  # Folder where all recipes will be saved
 IMAGE_FILENAME = Path("full.jpg")  # Default filename for recipe images
 RECIPE_FILENAME = Path("recipe.json")  # Default filename for recipe JSON data
 HEADERS = {"User-Agent": "Mozilla/5.0"}  # HTTP headers for web requests
@@ -134,14 +136,13 @@ class RecipeToCookbook:
 
         :raises ExceptionGroup: If any exceptions occur during processing.
         """
-        # TODO retry a configurable amount of times the failed urls
         exceptions: list[Exception] = []
         for url in self.url_list:
             try:
                 self.web_to_cookbook(url)
             except Exception as e:
                 exceptions.append(e)
-                print(f"Error processing {url}:\n{e}")
+                print(f"Error processing {url}:\n{traceback.format_exc()}")
                 continue
 
         if self.failed_urls:
@@ -150,12 +151,38 @@ class RecipeToCookbook:
         if exceptions:
             raise ExceptionGroup(f"{len(exceptions)} exceptions raised during scraping!", exceptions)
 
+    def run_with_retry(self, retries: int = 3) -> None:
+        """
+        Runs the recipe processing with a specified number of retries for failed URLs.
+
+        :param retries: Number of times to retry processing failed URLs.
+        """
+        for attempt in range(retries):
+            print(f"Attempt {attempt + 1} of {retries}")
+            try:
+                self.run_through_urls()
+            except ExceptionGroup as e:
+                print(f"Encountered {len(e.exceptions)} errors during processing:\n{traceback.format_exc()}")
+
+            if not self.failed_urls:
+                print("All URLs processed successfully.")
+                break
+            else:
+                print(f"Retrying {len(self.failed_urls)} failed URLs...")
+                self.url_list = self.failed_urls
+                self.failed_urls = []
+                time.sleep(2)  # allow for a brief pause before retrying
+
+        if self.failed_urls:
+            print(f"Failed to process {len(self.failed_urls)} URLs after {retries} attempts.")
+
     def _update_failed_urls_file(self, file_path: Path) -> None:
         """
         Updates a file with the failed URLs from this session, ensuring no duplicates.
 
         :param file_path: Path to the file where failed URLs are stored.
         """
+        print(f"Updating failed URLs file: {file_path}")
         failed_urls = set()
         if file_path.exists():
             with file_path.open("r", encoding="utf-8") as f:
@@ -203,7 +230,7 @@ if __name__ == "__main__":
 
     # Process the URLs
     recipe_to_cookbook = RecipeToCookbook(url_list=urls, target_folder=Path(args.target))
-    recipe_to_cookbook.run_through_urls()
+    recipe_to_cookbook.run_with_retry(retries=3)
 
     for file in args.file:
         print(f"Removing file {file} after processing.")
