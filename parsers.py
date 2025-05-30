@@ -6,6 +6,7 @@ from recipe_scrapers import AbstractScraper
 # Schema for the recipe JSON structure
 SCHEMA = {"@context": "https://schema.org", "@type": "Recipe"}
 
+
 @dataclass
 class RecipeForCookBook:
     """

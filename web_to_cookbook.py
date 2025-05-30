@@ -1,4 +1,5 @@
 import argparse
+import shutil
 
 import requests
 from recipe_scrapers import scrape_html, AbstractScraper
@@ -13,6 +14,138 @@ RECIPES_FOLDER = Path("parsed_recipes")  # Folder where all recipes will be save
 IMAGE_FILENAME = Path("full.jpg")  # Default filename for recipe images
 RECIPE_FILENAME = Path("recipe.json")  # Default filename for recipe JSON data
 HEADERS = {"User-Agent": "Mozilla/5.0"}  # HTTP headers for web requests
+
+
+class RecipeToCookbook:
+    """
+    Class to handle the conversion of web recipes to a cookbook format.
+    This class provides methods to extract URLs from files, fetch and parse recipes,
+    save recipe data and images, and manage the overall process of converting web recipes.
+    """
+
+    def __init__(self, url_list: list[str], target_folder: Path):
+        """
+        Initializes the RecipeToCookbook class with a list of URLs and a target folder.
+
+        :param url_list: A list of recipe URLs to process.
+        :param target_folder: The folder where all output recipes will be saved.
+        """
+        assert url_list, "URL list cannot be empty. Please provide at least one URL."
+        self.url_list: list[str] = url_list
+        self.target_folder: Path = target_folder
+        self.recipes: list[RecipeForCookBook] = []
+        self.failed_urls = []
+        self.urls_and_paths: dict[str, Path] = {}
+
+        if not self.target_folder.exists():
+            self.target_folder.mkdir(parents=False, exist_ok=False)
+            print(f"Created target folder: {self.target_folder}")
+
+    def _get_raw_recipe(self, url: str) -> AbstractScraper:
+        """
+        Fetches and parses raw recipe data from a given URL.
+
+        :param url: The URL of the recipe to scrape.
+        :return: An AbstractScraper object containing the raw recipe data.
+        """
+        res = requests.get(url, headers=HEADERS)
+        res.raise_for_status()
+        html = res.content.decode("utf-8")
+        recipe = scrape_html(html=html, org_url=url, online=True, supported_only=True)
+        print(f"Received recipe for '{recipe.title()}' by '{recipe.author()}'")
+        return recipe
+
+    def _get_and_save_image(self, recipe: RecipeForCookBook, target_folder: Path) -> Path:
+        """
+        Downloads and saves the recipe image to a file.
+
+        :param recipe: A RecipeForCookBook object containing recipe details.
+        :param target_folder: The parent folder under which the image will be saved.
+        :return: Path to the saved image file.
+        """
+        image_data: bytes = requests.get(recipe.image).content
+        file_path = target_folder / IMAGE_FILENAME
+        with file_path.open(mode='wb') as f:
+            f.write(image_data)
+
+        print(f"Saved image as {file_path}")
+        return file_path
+
+    def _save_to_json(self, recipe: RecipeForCookBook, target_folder: Path) -> Path:
+        """
+        Saves the recipe data to a JSON file.
+
+        :param recipe: A RecipeForCookBook object containing recipe details.
+        :param target_folder: The parent folder under which the JSON file will be saved.
+        :return: Path to the saved JSON file.
+        """
+        filename = target_folder / RECIPE_FILENAME
+        with filename.open("w", encoding="utf-8") as f:
+            json.dump(recipe.to_json(), f, indent=2, ensure_ascii=False)
+        print(f"Saved recipe as {filename}")
+        return filename
+
+    def web_to_cookbook(self, url: str):
+        """
+        Processes a recipe URL and saves its data and image to files.
+
+        :param url: The URL of the recipe to process.
+        """
+        print(f"Processing recipe from URL: {url}")
+        try:
+            recipe_raw = self._get_raw_recipe(url=url)
+            recipe_processed = parse_ah_recipe(recipe=recipe_raw)
+            target_folder = self._create_target_folder(recipe_processed)
+            self.urls_and_paths[url] = target_folder
+            self._save_to_json(recipe=recipe_processed, target_folder=target_folder)
+            self._get_and_save_image(recipe=recipe_processed, target_folder=target_folder)
+        except Exception as e:
+            self.failed_urls.append(url)
+            if url in self.urls_and_paths:
+                print(f"Failed to process {url}, removing from URLs and paths list.")
+                path = self.urls_and_paths.pop(url)
+                if path.exists():
+                    print(f"Removing folder {path} due to failure.")
+                    shutil.rmtree(path)
+
+            raise e
+        else:
+            if url in self.failed_urls:
+                print(f"Successfully processed {url}, removing from failed URLs list.")
+                self.failed_urls.remove(url)  # Remove URL from failed list if successful
+
+    def _create_target_folder(self, recipe_processed: RecipeForCookBook) -> Path:
+        """Creates a target folder for the recipe based on its folder name."""
+        i = 1
+        target_folder = self.target_folder / recipe_processed.folder_name
+        while target_folder.exists():
+            i += 1
+            new_name = f"{recipe_processed.folder_name}_{i}"
+            print(f"Folder {target_folder} already exists, trying '{new_name}'")
+            target_folder = (target_folder.with_name(new_name))
+        Path(target_folder).mkdir(exist_ok=False)
+        return target_folder
+
+    def run_through_urls(self) -> None:
+        """
+        Main function to process a list of recipe URLs.
+
+        :raises ExceptionGroup: If any exceptions occur during processing.
+        """
+        # TODO create file with all failed URLs (append if already exists but url not yet in file)
+        # TODO delete source files after processing
+        # TODO retry a configurable amount of times the failed urls
+        exceptions: list[Exception] = []
+        for url in self.url_list:
+            try:
+                self.web_to_cookbook(url)
+            except Exception as e:
+                exceptions.append(e)
+                print(f"Error processing {url}:\n{e}")
+                continue
+
+        if exceptions:
+            raise ExceptionGroup(f"{len(exceptions)} exceptions raised during scraping!", exceptions)
 
 
 def get_urls_from_file(url_file: Path) -> list[str]:
@@ -32,100 +165,6 @@ def get_urls_from_file(url_file: Path) -> list[str]:
     return urls
 
 
-def get_raw_recipe(url: str) -> AbstractScraper:
-    """
-    Fetches and parses raw recipe data from a given URL.
-
-    :param url: The URL of the recipe to scrape.
-    :return: An AbstractScraper object containing the raw recipe data.
-    """
-    res = requests.get(url, headers=HEADERS)
-    res.raise_for_status()
-    html = res.content.decode("utf-8")
-    recipe = scrape_html(html=html, org_url=url, online=True, supported_only=True)
-    print(f"Received recipe for '{recipe.title()}' by '{recipe.author()}'")
-    return recipe
-
-
-def get_and_save_image(recipe: RecipeForCookBook, target_folder: Path) -> Path:
-    """
-    Downloads and saves the recipe image to a file.
-
-    :param recipe: A RecipeForCookBook object containing recipe details.
-    :param target_folder: The parent folder under which the image will be saved.
-    :return: Path to the saved image file.
-    """
-    image_data: bytes = requests.get(recipe.image).content
-    file_path = target_folder / IMAGE_FILENAME
-    with file_path.open(mode='wb') as f:
-        f.write(image_data)
-
-    print(f"Saved image as {file_path}")
-    return file_path
-
-
-def save_to_json(recipe: RecipeForCookBook, target_folder: Path) -> Path:
-    """
-    Saves the recipe data to a JSON file.
-
-    :param recipe: A RecipeForCookBook object containing recipe details.
-    :param target_folder: The parent folder under which the JSON file will be saved.
-    :return: Path to the saved JSON file.
-    """
-    filename = target_folder / RECIPE_FILENAME
-    with filename.open("w", encoding="utf-8") as f:
-        json.dump(recipe.to_json(), f, indent=2, ensure_ascii=False)
-    print(f"Saved recipe as {filename}")
-    return filename
-
-
-def web_to_cookbook(url: str):
-    """
-    Processes a recipe URL and saves its data and image to files.
-
-    :param url: The URL of the recipe to process.
-    """
-    recipe_raw = get_raw_recipe(url=url)
-    recipe_processed = parse_ah_recipe(recipe=recipe_raw)
-
-    # Save files to subfolder
-    i=1
-    target_folder = RECIPES_FOLDER / recipe_processed.folder_name
-    while target_folder.exists():
-        i += 1
-        new_name = f"{recipe_processed.folder_name}_{i}"
-        print(f"Folder {target_folder} already exists, trying '{new_name}'")
-        target_folder = (target_folder.with_name(new_name))
-
-    Path(target_folder).mkdir(exist_ok=False)
-    save_to_json(recipe=recipe_processed, target_folder=target_folder)
-    get_and_save_image(recipe=recipe_processed, target_folder=target_folder)
-
-
-def main(url_list: [str], target_folder: Path) -> None:
-    """
-    Main function to process a list of recipe URLs.
-
-    :param url_list: A list of recipe URLs to process.
-    :param target_folder: The folder where all output recipes will be saved.
-    :raises ExceptionGroup: If any exceptions occur during processing.
-    """
-    exceptions: list[Exception] = []
-    if not target_folder.exists():
-        target_folder.mkdir(parents=False, exist_ok=False)
-
-    for url in url_list:
-        try:
-            web_to_cookbook(url)
-        except Exception as e:
-            exceptions.append(e)
-            print(f"Error processing {url}:\n{e}")
-            continue
-
-    if exceptions:
-        raise ExceptionGroup(f"{len(exceptions)} exceptions raised during scraping!", exceptions)
-
-
 if __name__ == "__main__":
     # Command-line argument parser for recipe URLs and files containing URLs
     parser = argparse.ArgumentParser(description="Scrape recipes from URLs or files containing URLs.")
@@ -137,9 +176,10 @@ if __name__ == "__main__":
     args: argparse.Namespace = parser.parse_args()
 
     # Combine URLs from command-line arguments and files
-    urls: [str] = args.url
+    urls: list[str] = args.url
     for file in args.file:
         urls.extend(get_urls_from_file(url_file=Path(file)))
 
     # Process the URLs
-    main(url_list=urls, target_folder=Path(args.target))
+    recipe_to_cookbook = RecipeToCookbook(url_list=urls, target_folder=Path(args.target))
+    recipe_to_cookbook.run_through_urls()

@@ -1,9 +1,26 @@
+import shutil
 import unittest
-from unittest.mock import patch, MagicMock, mock_open
+from contextlib import contextmanager
+from tempfile import TemporaryDirectory
+from unittest.mock import patch, MagicMock, mock_open, Mock
 from pathlib import Path
-from web_to_cookbook import get_urls_from_file, get_raw_recipe, save_to_json, get_and_save_image, web_to_cookbook
+
+from web_to_cookbook import get_urls_from_file, RecipeToCookbook
 
 MOCK_PARENT_FOLDER = Path("mock_parent_folder")
+
+
+@contextmanager
+def temporary_directory():
+    """
+    Context manager to create a temporary directory for testing.
+    """
+    MOCK_PARENT_FOLDER.mkdir(exist_ok=True)
+    try:
+        with TemporaryDirectory(dir=MOCK_PARENT_FOLDER) as temp_dir:
+            yield Path(temp_dir)
+    finally:
+        shutil.rmtree(MOCK_PARENT_FOLDER, ignore_errors=True)
 
 
 class TestWebToCookbook(unittest.TestCase):
@@ -41,56 +58,99 @@ class TestWebToCookbook(unittest.TestCase):
         """
         mock_response = MagicMock()
         mock_response.content.decode.return_value = "<html></html>"
-        with patch("web_to_cookbook.requests.get", return_value=mock_response), \
-             patch("web_to_cookbook.scrape_html", return_value=MagicMock(title=lambda: "Recipe Title", author=lambda: "Author")):
-            recipe = get_raw_recipe("http://example.com")
-            self.assertEqual(recipe.title(), "Recipe Title")
-            self.assertEqual(recipe.author(), "Author")
+        with temporary_directory() as tmp_path:
+            rtc = RecipeToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
+            with patch("web_to_cookbook.requests.get", return_value=mock_response), \
+                    patch("web_to_cookbook.scrape_html",
+                          return_value=MagicMock(title=lambda: "Recipe Title", author=lambda: "Author")):
+                recipe = rtc._get_raw_recipe("http://example.com")
+                self.assertEqual(recipe.title(), "Recipe Title")
+                self.assertEqual(recipe.author(), "Author")
 
     def test_raises_error_for_invalid_url(self):
         """
         Tests that an exception is raised when an invalid URL is provided.
         """
-        with patch("web_to_cookbook.requests.get", side_effect=Exception("Invalid URL")):
-            with self.assertRaises(Exception):
-                get_raw_recipe("http://invalid-url.com")
+        with temporary_directory() as tmp_path:
+            rtc = RecipeToCookbook(url_list=["http://invalid-url.com"], target_folder=tmp_path)
+            with patch("web_to_cookbook.requests.get", side_effect=Exception("Invalid URL")):
+                with self.assertRaises(Exception):
+                    rtc._get_raw_recipe("http://invalid-url.com")
+
+    def test_creates_folder_with_correct_name(self):
+        """
+        Verifies that the folder is created with the correct name based on the recipe's folder name.
+        """
+        with temporary_directory() as tmp_path:
+            rtc = RecipeToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
+
+            mock_recipe = Mock()
+            mock_recipe.folder_name = "new_folder"
+
+            created_folder = rtc._create_target_folder(recipe_processed=mock_recipe)
+
+            self.assertTrue(created_folder.exists())
+            self.assertEqual(created_folder.name, "new_folder")
+
+    def test_creates_unique_folder_when_folder_name_exists(self):
+        """
+        Ensures that a unique folder is created when a folder with the same name already exists.
+        """
+        with temporary_directory() as tmp_path:
+            rtc = RecipeToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
+            mock_recipe = Mock()
+            mock_recipe.folder_name = "existing_folder"
+            existing_folder = tmp_path / mock_recipe.folder_name
+            existing_folder.mkdir(exist_ok=True)
+            new_folder = rtc._create_target_folder(recipe_processed=mock_recipe)
+
+            self.assertTrue(new_folder.exists())
+            self.assertEqual("existing_folder_2", new_folder.name)
+            self.assertNotEqual(existing_folder, new_folder)
 
     def test_saves_recipe_to_json_file(self):
         """
         Tests that recipe data is saved correctly to a JSON file.
         """
-        mock_recipe = MagicMock()
-        mock_recipe.folder_name = Path("mock_folder")
-        mock_recipe.to_json.return_value = {"name": "Mock Recipe"}
-        with patch("web_to_cookbook.Path.open", mock_open()):
-            path = save_to_json(recipe=mock_recipe, target_folder=MOCK_PARENT_FOLDER / mock_recipe.folder_name)
-            self.assertEqual(path, Path("mock_parent_folder/mock_folder/recipe.json"))
+        with temporary_directory() as tmp_path:
+            mock_recipe = MagicMock()
+            mock_recipe.folder_name = Path("mock_folder")
+            mock_recipe.to_json.return_value = {"name": "Mock Recipe"}
+            rtc = RecipeToCookbook(url_list=["dummy"], target_folder=tmp_path)
+            with patch("web_to_cookbook.Path.open", mock_open()):
+                path = rtc._save_to_json(recipe=mock_recipe, target_folder=tmp_path / mock_recipe.folder_name)
+                self.assertEqual(path, tmp_path / "mock_folder/recipe.json")
 
     def test_downloads_and_saves_image(self):
         """
         Tests that the recipe image is downloaded and saved correctly.
         """
-        mock_recipe = MagicMock()
-        mock_recipe.folder_name = Path("mock_folder")
-        mock_recipe.image = "http://example.com/image.jpg"
-        with patch("web_to_cookbook.requests.get", return_value=MagicMock(content=b"image_data")), \
-             patch("web_to_cookbook.Path.open", mock_open()):
-            path = get_and_save_image(recipe=mock_recipe, target_folder=MOCK_PARENT_FOLDER / mock_recipe.folder_name)
-            self.assertEqual(path, Path("mock_parent_folder/mock_folder/full.jpg"))
+        with temporary_directory() as tmp_path:
+            mock_recipe = MagicMock()
+            mock_recipe.folder_name = Path("mock_folder")
+            mock_recipe.image = "http://example.com/image.jpg"
+            rtc = RecipeToCookbook(url_list=["dummy"], target_folder=tmp_path)
+            with patch("web_to_cookbook.requests.get", return_value=MagicMock(content=b"image_data")), \
+                    patch("web_to_cookbook.Path.open", mock_open()):
+                path = rtc._get_and_save_image(recipe=mock_recipe,
+                                               target_folder=tmp_path / mock_recipe.folder_name)
+                self.assertEqual(path, tmp_path / "mock_folder/full.jpg")
 
     def test_processes_valid_recipe_url(self):
         """
         Tests that a valid recipe URL is processed correctly, including saving
         the recipe data and image to the appropriate folder.
         """
-        mock_recipe_raw = MagicMock()
-        mock_recipe_processed = MagicMock(folder_name=Path("/mock_folder"))
-        with patch("web_to_cookbook.get_raw_recipe", return_value=mock_recipe_raw), \
-             patch("web_to_cookbook.parse_ah_recipe", return_value=mock_recipe_processed), \
-             patch("web_to_cookbook.Path.mkdir"), \
-             patch("web_to_cookbook.save_to_json"), \
-             patch("web_to_cookbook.get_and_save_image"):
-            web_to_cookbook("http://example.com")
+        with temporary_directory() as tmp_path:
+            mock_recipe_raw = MagicMock()
+            mock_recipe_processed = MagicMock(folder_name=Path("/mock_folder"))
+            rtc = RecipeToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
+            with patch.object(rtc, "_get_raw_recipe", return_value=mock_recipe_raw), \
+                    patch("web_to_cookbook.parse_ah_recipe", return_value=mock_recipe_processed), \
+                    patch("web_to_cookbook.Path.mkdir"), \
+                    patch.object(rtc, "_save_to_json"), \
+                    patch.object(rtc, "_get_and_save_image"):
+                rtc.web_to_cookbook("http://example.com")
 
 
 if __name__ == '__main__':

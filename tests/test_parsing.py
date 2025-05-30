@@ -1,7 +1,6 @@
 import unittest
 from unittest.mock import Mock
 
-
 from parsers import parse_ah_recipe
 
 
@@ -85,7 +84,6 @@ class TestParsing(unittest.TestCase):
         mock_recipe.cuisine.return_value = ""
         mock_recipe.soup.find_all.return_value = []
         mock_recipe.to_json.return_value = {}
-
 
         parsed_recipe = parse_ah_recipe(recipe=mock_recipe)
 
