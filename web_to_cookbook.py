@@ -15,7 +15,7 @@ from urlextract import URLExtract
 RECIPES_FOLDER = Path("parsed_recipes")  # Folder where all recipes will be saved
 IMAGE_FILENAME = Path("full.jpg")  # Default filename for recipe images
 RECIPE_FILENAME = Path("recipe.json")  # Default filename for recipe JSON data
-HEADERS = {"User-Agent": "Mozilla/5.0"}  # HTTP headers for web requests
+HEADERS = {"User-Agent": "Mozilla/5.0", 'referer': 'https://...'}  # HTTP headers for web requests
 FAILED_URLS_FILE = Path("failed_urls.txt")  # File to store failed URLs
 
 
