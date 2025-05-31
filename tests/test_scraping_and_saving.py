@@ -177,7 +177,7 @@ class TestWebToCookbook(unittest.TestCase):
         with temporary_file(initial_contents=initial_contents) as tmp_file:
             with temporary_directory() as tmp_path:
                 rtc = RecipeToCookbook(url_list=["http://example.com", "http://newurl.com"], target_folder=tmp_path)
-                rtc.failed_urls = rtc.url_list
+                rtc.failed_urls = list(rtc.url_set)
                 rtc._update_failed_urls_file(file_path=tmp_file)
 
                 file_urls = URLExtract().find_urls(tmp_file.read_text())

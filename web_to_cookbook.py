@@ -76,7 +76,7 @@ class RecipeToCookbook:
         :param interface: The network interface to use for the source IP address.
         """
         assert url_list, "URL list cannot be empty. Please provide at least one URL."
-        self.url_list: list[str] = url_list
+        self.url_set: set[str] = set(url_list)  # Use a set to avoid duplicates
         self.target_folder: Path = target_folder
         self.recipes: list[RecipeForCookBook] = []
         self.failed_urls = []
@@ -168,10 +168,12 @@ class RecipeToCookbook:
                     shutil.rmtree(path)
 
             raise e
-        else:
-            if url in self.failed_urls:
-                print(f"Successfully processed {url}, removing from failed URLs list.")
-                self.failed_urls.remove(url)  # Remove URL from failed list if successful
+
+        # Success!
+        self.success_urls.append(url)
+        if url in self.failed_urls:
+            print(f"Successfully processed {url}, removing from failed URLs list.")
+            self.failed_urls.remove(url)  # Remove URL from failed list if successful
 
     def _create_target_folder(self, recipe_processed: RecipeForCookBook) -> Path:
         """Creates a target folder for the recipe based on its folder name."""
@@ -192,7 +194,7 @@ class RecipeToCookbook:
         :raises ExceptionGroup: If any exceptions occur during processing.
         """
         exceptions: list[Exception] = []
-        for url in self.url_list:
+        for url in self.url_set:
             try:
                 self.web_to_cookbook(url)
             except Exception as e:
@@ -200,8 +202,7 @@ class RecipeToCookbook:
                 print(f"Error processing {url}:\n{traceback.format_exc()}")
                 continue
 
-        if self.failed_urls:
-            self._update_failed_urls_file(file_path=self.target_folder / FAILED_URLS_FILE)
+        self._update_failed_urls_file(file_path=self.target_folder / FAILED_URLS_FILE)
 
         if exceptions:
             raise ExceptionGroup(f"{len(exceptions)} exceptions raised during scraping!", exceptions)
@@ -224,8 +225,8 @@ class RecipeToCookbook:
                 break
             else:
                 print(f"Retrying {len(self.failed_urls)} failed URLs...")
-                self.url_list = self.failed_urls
-                self.failed_urls = []
+                self.url_set = set(self.failed_urls)
+                self.failed_urls.clear()
                 time.sleep(2)  # allow for a brief pause before retrying
 
         if self.failed_urls:
@@ -248,6 +249,7 @@ class RecipeToCookbook:
 
         failed_urls.update(self.failed_urls)
         with file_path.open("w", encoding="utf-8") as f:
+            f.truncate(0)  # Clear the file before writing
             f.write("\n".join(failed_urls))
 
 
@@ -282,6 +284,8 @@ if __name__ == "__main__":
     urls: list[str] = args.url
     for file in args.file:
         urls.extend(get_urls_from_file(url_file=Path(file)))
+
+    urls = [url.strip() for url in urls if url.strip()]  # Remove any empty URLs, and remove any whitespace
 
     # Process the URLs
     recipe_to_cookbook = RecipeToCookbook(url_list=urls, target_folder=Path(args.target))
