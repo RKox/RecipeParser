@@ -114,7 +114,8 @@ class RecipeToCookbook:
         print(f"Received recipe for '{recipe.title()}' by '{recipe.author()}'")
         return recipe
 
-    def _get_and_save_image(self, recipe: RecipeForCookBook, target_folder: Path) -> Path:
+    @staticmethod
+    def _get_and_save_image(recipe: RecipeForCookBook, target_folder: Path) -> Path:
         """
         Downloads and saves the recipe image to a file.
 
@@ -130,7 +131,8 @@ class RecipeToCookbook:
         print(f"Saved image as {file_path}")
         return file_path
 
-    def _save_to_json(self, recipe: RecipeForCookBook, target_folder: Path) -> Path:
+    @staticmethod
+    def _save_to_json(recipe: RecipeForCookBook, target_folder: Path) -> Path:
         """
         Saves the recipe data to a JSON file.
 
@@ -273,6 +275,10 @@ def get_urls_from_file(url_file: Path) -> list[str]:
 if __name__ == "__main__":
     # Command-line argument parser for recipe URLs and files containing URLs
     parser = argparse.ArgumentParser(description="Scrape recipes from URLs or files containing URLs.")
+    parser.add_argument("-i", "--interface", type=str,
+                        help="Which network interace to use (e.g. end0). "
+                             "If no interface is specified, it defaults to '127.0.0.1'",
+                        default="")
     parser.add_argument("-u", "--url", action="append", help="Recipe URLs to scrape", default=[])
     parser.add_argument("-f", "--file", action="append", help="Files containing recipe URLs", default=[])
     parser.add_argument(
@@ -288,7 +294,7 @@ if __name__ == "__main__":
     urls = [url.strip() for url in urls if url.strip()]  # Remove any empty URLs, and remove any whitespace
 
     # Process the URLs
-    recipe_to_cookbook = RecipeToCookbook(url_list=urls, target_folder=Path(args.target))
+    recipe_to_cookbook = RecipeToCookbook(url_list=urls, target_folder=Path(args.target), interface=args.interface)
     recipe_to_cookbook.run_with_retry(retries=3)
 
     for file in args.file:

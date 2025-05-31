@@ -1,11 +1,10 @@
 import shutil
 import unittest
 from contextlib import contextmanager
-from tempfile import TemporaryDirectory, TemporaryFile
+from tempfile import TemporaryDirectory
 from unittest.mock import patch, MagicMock, mock_open, Mock
 from pathlib import Path
 
-from pyRdfa.host import initial_contexts
 from urlextract import URLExtract
 
 from web_to_cookbook import get_urls_from_file, RecipeToCookbook
@@ -76,7 +75,7 @@ class TestWebToCookbook(unittest.TestCase):
         mock_response.content.decode.return_value = "<html></html>"
         with temporary_directory() as tmp_path:
             rtc = RecipeToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
-            with patch("web_to_cookbook.requests.get", return_value=mock_response), \
+            with patch("web_to_cookbook.requests.Session.get", return_value=mock_response), \
                     patch("web_to_cookbook.scrape_html",
                           return_value=MagicMock(title=lambda: "Recipe Title", author=lambda: "Author")):
                 recipe = rtc._get_raw_recipe("http://example.com")
@@ -89,7 +88,7 @@ class TestWebToCookbook(unittest.TestCase):
         """
         with temporary_directory() as tmp_path:
             rtc = RecipeToCookbook(url_list=["http://invalid-url.com"], target_folder=tmp_path)
-            with patch("web_to_cookbook.requests.get", side_effect=Exception("Invalid URL")):
+            with patch("web_to_cookbook.requests.Session.get", side_effect=Exception("Invalid URL")):
                 with self.assertRaises(Exception):
                     rtc._get_raw_recipe("http://invalid-url.com")
 
@@ -146,7 +145,7 @@ class TestWebToCookbook(unittest.TestCase):
             mock_recipe.folder_name = Path("mock_folder")
             mock_recipe.image = "http://example.com/image.jpg"
             rtc = RecipeToCookbook(url_list=["dummy"], target_folder=tmp_path)
-            with patch("web_to_cookbook.requests.get", return_value=MagicMock(content=b"image_data")), \
+            with patch("web_to_cookbook.requests.Session.get", return_value=MagicMock(content=b"image_data")), \
                     patch("web_to_cookbook.Path.open", mock_open()):
                 path = rtc._get_and_save_image(recipe=mock_recipe,
                                                target_folder=tmp_path / mock_recipe.folder_name)
