@@ -3,6 +3,9 @@ import shutil
 import time
 import traceback
 
+import netifaces
+from requests import Session
+from requests.adapters import HTTPAdapter
 import requests
 from recipe_scrapers import scrape_html, AbstractScraper
 import json
@@ -15,8 +18,46 @@ from urlextract import URLExtract
 RECIPES_FOLDER = Path("parsed_recipes")  # Folder where all recipes will be saved
 IMAGE_FILENAME = Path("full.jpg")  # Default filename for recipe images
 RECIPE_FILENAME = Path("recipe.json")  # Default filename for recipe JSON data
-HEADERS = {"User-Agent": "Mozilla/5.0"}  # HTTP headers for web requests
+HEADERS = {"User-Agent": "Mozilla/5.0", 'referer': 'https://...'}  # HTTP headers for web requests
 FAILED_URLS_FILE = Path("failed_urls.txt")  # File to store failed URLs
+
+
+def get_source_ip(interface: str = "") -> str:
+    """
+    Retrieves the source IP address for a given network interface.
+    If no interface is specified, it defaults to '127.0.0.1'.
+    If the specified interface is not found, it raises a ValueError.
+    If the interface does not have an IPv4 address, it raises a ValueError.
+
+    :param interface: The name of the network interface (e.g., 'eth0', 'wlan0').
+    :return: The IP address as a string.
+    """
+    if not interface:
+        return "127.0.0.1"
+    if interface not in (ifs := netifaces.interfaces()):
+        raise ValueError(f"Interface '{interface}' not found. Choose from: {ifs}")
+    addresses = netifaces.ifaddresses(interface)
+    if netifaces.AF_INET not in addresses:
+        raise ValueError(f"No IPv4 address found for interface '{interface}'. \nAvailable interfaces: {ifs}")
+    return addresses[netifaces.AF_INET][0]['addr']
+
+
+class SourceIPAdapter(HTTPAdapter):
+    """
+    Custom HTTPAdapter that allows setting a specific source IP address for requests.
+    This is useful for scenarios where requests need to originate from a specific IP,
+    such as when using a multi-homed server or specific network interface.
+
+    :param source_ip: The source IP address to use for requests.
+    """
+
+    def __init__(self, source_ip, **kwargs):
+        self.source_ip = source_ip
+        super().__init__(**kwargs)
+
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs['source_address'] = (self.source_ip, 0)
+        return super().init_poolmanager(*args, **kwargs)
 
 
 class RecipeToCookbook:
@@ -26,12 +67,13 @@ class RecipeToCookbook:
     save recipe data and images, and manage the overall process of converting web recipes.
     """
 
-    def __init__(self, url_list: list[str], target_folder: Path):
+    def __init__(self, url_list: list[str], target_folder: Path, interface: str = ""):
         """
         Initializes the RecipeToCookbook class with a list of URLs and a target folder.
 
         :param url_list: A list of recipe URLs to process.
         :param target_folder: The folder where all output recipes will be saved.
+        :param interface: The network interface to use for the source IP address.
         """
         assert url_list, "URL list cannot be empty. Please provide at least one URL."
         self.url_list: list[str] = url_list
@@ -40,10 +82,23 @@ class RecipeToCookbook:
         self.failed_urls = []
         self.success_urls = []
         self.urls_and_paths: dict[str, Path] = {}
+        self._interface: str = interface
+        self._session = self._get_new_session()
 
         if not self.target_folder.exists():
             self.target_folder.mkdir(parents=False, exist_ok=False)
             print(f"Created target folder: {self.target_folder}")
+
+    def _get_new_session(self) -> Session:
+        """
+        Creates a new requests session with a custom source IP address based on the specified network interface.
+        :return: A requests Session object with the source IP set.
+        """
+        session = requests.Session()
+        source_ip = get_source_ip(interface=self._interface)
+        session.mount('http://', SourceIPAdapter(source_ip))
+        session.mount('https://', SourceIPAdapter(source_ip))
+        return session
 
     def _get_raw_recipe(self, url: str) -> AbstractScraper:
         """
@@ -52,7 +107,7 @@ class RecipeToCookbook:
         :param url: The URL of the recipe to scrape.
         :return: An AbstractScraper object containing the raw recipe data.
         """
-        res = requests.get(url, headers=HEADERS)
+        res = self._session.get(url, headers=HEADERS)
         res.raise_for_status()
         html = res.content.decode("utf-8")
         recipe = scrape_html(html=html, org_url=url, online=True, supported_only=True)
