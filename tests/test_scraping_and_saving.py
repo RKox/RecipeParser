@@ -7,7 +7,7 @@ from pathlib import Path
 
 from urlextract import URLExtract
 
-from web_to_cookbook import get_urls_from_file, RecipeToCookbook
+from web_to_cookbook import get_urls_from_file, URLToCookbook
 
 MOCK_PARENT_FOLDER = Path("mock_parent_folder")
 
@@ -74,7 +74,7 @@ class TestWebToCookbook(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.content.decode.return_value = "<html></html>"
         with temporary_directory() as tmp_path:
-            rtc = RecipeToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
+            rtc = URLToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
             with patch("web_to_cookbook.requests.Session.get", return_value=mock_response), \
                     patch("web_to_cookbook.scrape_html",
                           return_value=MagicMock(title=lambda: "Recipe Title", author=lambda: "Author")):
@@ -87,7 +87,7 @@ class TestWebToCookbook(unittest.TestCase):
         Tests that an exception is raised when an invalid URL is provided.
         """
         with temporary_directory() as tmp_path:
-            rtc = RecipeToCookbook(url_list=["http://invalid-url.com"], target_folder=tmp_path)
+            rtc = URLToCookbook(url_list=["http://invalid-url.com"], target_folder=tmp_path)
             with patch("web_to_cookbook.requests.Session.get", side_effect=Exception("Invalid URL")):
                 with self.assertRaises(Exception):
                     rtc._get_recipe_from_url("http://invalid-url.com")
@@ -97,7 +97,7 @@ class TestWebToCookbook(unittest.TestCase):
         Verifies that the folder is created with the correct name based on the recipe's folder name.
         """
         with temporary_directory() as tmp_path:
-            rtc = RecipeToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
+            rtc = URLToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
 
             mock_recipe = Mock()
             mock_recipe.folder_name = "new_folder"
@@ -112,7 +112,7 @@ class TestWebToCookbook(unittest.TestCase):
         Ensures that a unique folder is created when a folder with the same name already exists.
         """
         with temporary_directory() as tmp_path:
-            rtc = RecipeToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
+            rtc = URLToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
             mock_recipe = Mock()
             mock_recipe.folder_name = "existing_folder"
             existing_folder = tmp_path / mock_recipe.folder_name
@@ -131,9 +131,9 @@ class TestWebToCookbook(unittest.TestCase):
             mock_recipe = MagicMock()
             mock_recipe.folder_name = Path("mock_folder")
             mock_recipe.to_json.return_value = {"name": "Mock Recipe"}
-            rtc = RecipeToCookbook(url_list=["dummy"], target_folder=tmp_path)
+            rtc = URLToCookbook(url_list=["dummy"], target_folder=tmp_path)
             with patch("web_to_cookbook.Path.open", mock_open()):
-                path = rtc._save_to_json(recipe=mock_recipe, target_folder=tmp_path / mock_recipe.folder_name)
+                path = rtc._save_to_json(recipe_container=mock_recipe, target_folder=tmp_path / mock_recipe.folder_name)
                 self.assertEqual(path, tmp_path / "mock_folder/recipe.json")
 
     def test_downloads_and_saves_image(self):
@@ -144,10 +144,10 @@ class TestWebToCookbook(unittest.TestCase):
             mock_recipe = MagicMock()
             mock_recipe.folder_name = Path("mock_folder")
             mock_recipe.image = "http://example.com/image.jpg"
-            rtc = RecipeToCookbook(url_list=["dummy"], target_folder=tmp_path)
+            rtc = URLToCookbook(url_list=["dummy"], target_folder=tmp_path)
             with patch("web_to_cookbook.requests.Session.get", return_value=MagicMock(content=b"image_data")), \
                     patch("web_to_cookbook.Path.open", mock_open()):
-                path = rtc._get_and_save_image(recipe=mock_recipe,
+                path = rtc._get_and_save_image(recipe_container=mock_recipe,
                                                target_folder=tmp_path / mock_recipe.folder_name)
                 self.assertEqual(path, tmp_path / "mock_folder/full.jpg")
 
@@ -159,7 +159,7 @@ class TestWebToCookbook(unittest.TestCase):
         with temporary_directory() as tmp_path:
             mock_recipe_raw = MagicMock()
             mock_recipe_processed = MagicMock(folder_name=Path("/mock_folder"))
-            rtc = RecipeToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
+            rtc = URLToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
             with patch.object(rtc, "_get_recipe_from_url", return_value=mock_recipe_raw), \
                     patch("web_to_cookbook.parse_recipe", return_value=mock_recipe_processed), \
                     patch("web_to_cookbook.Path.mkdir"), \
@@ -175,7 +175,7 @@ class TestWebToCookbook(unittest.TestCase):
         expected_contents = "http://example.com\nhttp://test.com\nhttp://newurl.com\n"
         with temporary_file(initial_contents=initial_contents) as tmp_file:
             with temporary_directory() as tmp_path:
-                rtc = RecipeToCookbook(url_list=["http://example.com", "http://newurl.com"], target_folder=tmp_path)
+                rtc = URLToCookbook(url_list=["http://example.com", "http://newurl.com"], target_folder=tmp_path)
                 rtc.failed_urls = list(rtc.url_set)
                 rtc._update_failed_urls_file(file_path=tmp_file)
 
@@ -191,7 +191,7 @@ class TestWebToCookbook(unittest.TestCase):
         failing_url = ["http://example.com", "http://newurl.com"]
         with temporary_file() as tmp_file:
             with temporary_directory() as tmp_path:
-                rtc = RecipeToCookbook(url_list=failing_url, target_folder=tmp_path)
+                rtc = URLToCookbook(url_list=failing_url, target_folder=tmp_path)
                 rtc.failed_urls = failing_url
                 rtc._update_failed_urls_file(file_path=tmp_file)
 
@@ -205,7 +205,7 @@ class TestWebToCookbook(unittest.TestCase):
         success_urls = ["http://success.com"]
         with temporary_file(initial_contents=initial_contents) as tmp_file:
             with temporary_directory() as tmp_path:
-                rtc = RecipeToCookbook(url_list=failing_urls + success_urls, target_folder=tmp_path)
+                rtc = URLToCookbook(url_list=failing_urls + success_urls, target_folder=tmp_path)
                 rtc.failed_urls = failing_urls
                 rtc.success_urls = success_urls
                 rtc._update_failed_urls_file(file_path=tmp_file)
