@@ -78,7 +78,7 @@ class TestWebToCookbook(unittest.TestCase):
             with patch("web_to_cookbook.requests.Session.get", return_value=mock_response), \
                     patch("web_to_cookbook.scrape_html",
                           return_value=MagicMock(title=lambda: "Recipe Title", author=lambda: "Author")):
-                recipe = rtc._get_raw_recipe("http://example.com")
+                recipe = rtc._get_recipe_from_url("http://example.com")
                 self.assertEqual(recipe.title(), "Recipe Title")
                 self.assertEqual(recipe.author(), "Author")
 
@@ -90,7 +90,7 @@ class TestWebToCookbook(unittest.TestCase):
             rtc = RecipeToCookbook(url_list=["http://invalid-url.com"], target_folder=tmp_path)
             with patch("web_to_cookbook.requests.Session.get", side_effect=Exception("Invalid URL")):
                 with self.assertRaises(Exception):
-                    rtc._get_raw_recipe("http://invalid-url.com")
+                    rtc._get_recipe_from_url("http://invalid-url.com")
 
     def test_creates_folder_with_correct_name(self):
         """
@@ -160,8 +160,8 @@ class TestWebToCookbook(unittest.TestCase):
             mock_recipe_raw = MagicMock()
             mock_recipe_processed = MagicMock(folder_name=Path("/mock_folder"))
             rtc = RecipeToCookbook(url_list=["http://example.com"], target_folder=tmp_path)
-            with patch.object(rtc, "_get_raw_recipe", return_value=mock_recipe_raw), \
-                    patch("web_to_cookbook.parse_ah_recipe", return_value=mock_recipe_processed), \
+            with patch.object(rtc, "_get_recipe_from_url", return_value=mock_recipe_raw), \
+                    patch("web_to_cookbook.parse_recipe", return_value=mock_recipe_processed), \
                     patch("web_to_cookbook.Path.mkdir"), \
                     patch.object(rtc, "_save_to_json"), \
                     patch.object(rtc, "_get_and_save_image"):

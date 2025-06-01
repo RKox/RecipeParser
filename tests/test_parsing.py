@@ -6,9 +6,9 @@ from parsers import parse_recipe
 
 class TestParsing(unittest.TestCase):
     """
-    Unit tests for the `parse_ah_recipe` function.
+    Unit tests for the `parse_recipe` function.
 
-    This test suite verifies the behavior of the `parse_ah_recipe` function
+    This test suite verifies the behavior of the `parse_recipe` function
     when provided with valid and missing recipe data.
     """
 
@@ -58,7 +58,6 @@ class TestParsing(unittest.TestCase):
         self.assertEqual(parsed_recipe.cookTime, "PT30M")
         self.assertEqual(parsed_recipe.recipeCategory, "Mock Category")
         self.assertEqual(parsed_recipe.keywords, ["keyword1", "keyword2", "restriction1", "Mock Cuisine"])
-        # self.assertEqual(parsed_recipe.tool, ["Tool1", "Tool2"])
         self.assertEqual(parsed_recipe.recipeIngredient, ["ingredient1", "ingredient2"])
         self.assertEqual(parsed_recipe.recipeInstructions, [{"step": "Mock step"}])
         self.assertEqual(parsed_recipe.nutrition, {"calories": "200 kcal"})
