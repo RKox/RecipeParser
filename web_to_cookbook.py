@@ -11,14 +11,13 @@ from recipe_scrapers import scrape_html, AbstractScraper
 import json
 from pathlib import Path
 
-from parsers import parse_ah_recipe, RecipeForCookBook
+from parsers import parse_recipe, RecipeForCookBook, get_proper_parser
 from urlextract import URLExtract
 
 # Constants for file paths and headers
 RECIPES_FOLDER = Path("parsed_recipes")  # Folder where all recipes will be saved
 IMAGE_FILENAME = Path("full.jpg")  # Default filename for recipe images
 RECIPE_FILENAME = Path("recipe.json")  # Default filename for recipe JSON data
-HEADERS = {"User-Agent": "Mozilla/5.0", 'referer': 'https://...'}  # HTTP headers for web requests
 FAILED_URLS_FILE = Path("failed_urls.txt")  # File to store failed URLs
 
 
@@ -39,6 +38,7 @@ def get_source_ip(interface: str = "") -> str:
     addresses = netifaces.ifaddresses(interface)
     if netifaces.AF_INET not in addresses:
         raise ValueError(f"No IPv4 address found for interface '{interface}'. \nAvailable interfaces: {ifs}")
+
     return addresses[netifaces.AF_INET][0]['addr']
 
 
@@ -107,7 +107,8 @@ class RecipeToCookbook:
         :param url: The URL of the recipe to scrape.
         :return: An AbstractScraper object containing the raw recipe data.
         """
-        res = self._session.get(url, headers=HEADERS)
+        headers = get_proper_parser(url=url).HEADERS
+        res = self._session.get(url, headers=headers)
         res.raise_for_status()
         html = res.content.decode("utf-8")
         recipe = scrape_html(html=html, org_url=url, online=True, supported_only=True)
@@ -155,7 +156,7 @@ class RecipeToCookbook:
         print(f"Processing recipe from URL: {url}")
         try:
             recipe_raw = self._get_raw_recipe(url=url)
-            recipe_processed = parse_ah_recipe(recipe=recipe_raw)
+            recipe_processed = parse_recipe(recipe=recipe_raw)
             target_folder = self._create_target_folder(recipe_processed)
             self.urls_and_paths[url] = target_folder
             self._save_to_json(recipe=recipe_processed, target_folder=target_folder)

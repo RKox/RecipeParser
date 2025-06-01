@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from parsers import parse_ah_recipe
+from parsers import parse_recipe
 
 
 class TestParsing(unittest.TestCase):
@@ -23,8 +23,10 @@ class TestParsing(unittest.TestCase):
         # mock_recipe.mock_add_spec(spec=AlbertHeijn, spec_set=True)
         mock_recipe.title.return_value = "Mock Recipe"
         mock_recipe.author.return_value = "Mock Author"
-        mock_recipe.yields.return_value = "4 servings"
+        mock_recipe.yields.return_value = 4
         mock_recipe.description.return_value = "Mock description"
+        mock_recipe.url = "http://example.com"
+        mock_recipe.configure_mock(url="http://example.com")
         mock_recipe.schema.data = {
             "url": "http://example.com",
             "image": "http://example.com/image.jpg",
@@ -43,7 +45,7 @@ class TestParsing(unittest.TestCase):
         mock_recipe.soup.find_all.return_value = []
         mock_recipe.to_json.return_value = {"image": "http://example.com/image.jpg"}
 
-        parsed_recipe = parse_ah_recipe(recipe=mock_recipe)
+        parsed_recipe = parse_recipe(recipe=mock_recipe)
 
         self.assertEqual(parsed_recipe.name, "Mock Recipe")
         self.assertEqual(parsed_recipe.author, "Mock Author")
@@ -70,10 +72,10 @@ class TestParsing(unittest.TestCase):
         the parsed recipe object uses default values for those attributes.
         """
         mock_recipe = Mock()
-        # mock_recipe.mock_add_spec(spec=AlbertHeijn, spec_set=True)
         mock_recipe.title.return_value = "Mock Recipe"
+        mock_recipe.configure_mock(url="")
         mock_recipe.author.return_value = ""
-        mock_recipe.yields.return_value = "0 servings"
+        mock_recipe.yields.return_value = 0
         mock_recipe.description.return_value = ""
         mock_recipe.schema.data = {}
         mock_recipe.category.return_value = ""
@@ -85,7 +87,7 @@ class TestParsing(unittest.TestCase):
         mock_recipe.soup.find_all.return_value = []
         mock_recipe.to_json.return_value = {}
 
-        parsed_recipe = parse_ah_recipe(recipe=mock_recipe)
+        parsed_recipe = parse_recipe(recipe=mock_recipe)
 
         self.assertEqual(parsed_recipe.name, "Mock Recipe")
         self.assertEqual(parsed_recipe.author, "")
