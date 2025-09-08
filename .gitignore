@@ -7,3 +7,4 @@
 .idea/inspectionProfiles/profiles_settings.xml
 *.pyc
 /parsed_recipes*/
+cookies.pkl
