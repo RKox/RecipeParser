@@ -14,5 +14,5 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-           - run: flake8 . || true
-          - run: pytest -q -m "not integration" --cov=. --cov-report=term-missing
+      - run: flake8 . || true
+      - run: pytest -q -m "not integration" --cov=. --cov-report=term-missing
