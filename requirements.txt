@@ -3,3 +3,6 @@ recipe-scrapers==15.7.1
 urlextract==1.9.0
 pytest==8.3.5
 netifaces2==0.0.22
+pytest-cov==5.0.0
+flake8==7.1.1
+curl_cffi==0.5.12
