@@ -9,10 +9,6 @@ from urlextract import URLExtract
 
 from web_to_cookbook import get_urls_from_file, URLToCookbook
 
-import pytest
-
-pytestmark = pytest.mark.skip("web_to_cookbook API under refactor")
-
 MOCK_PARENT_FOLDER = Path("mock_parent_folder")
 
 
@@ -42,6 +38,7 @@ def temporary_file(initial_contents: str = ""):
         yield temp_file
 
 
+@unittest.skip("web_to_cookbook API under refactor")
 class TestWebToCookbook(unittest.TestCase):
     """
     Unit tests for the `web_to_cookbook` module.
