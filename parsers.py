@@ -2,12 +2,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, asdict
 from functools import cached_property
 from urllib.parse import urlparse
+from typing import Dict, List, Optional
 
 from recipe_scrapers import AbstractScraper
 
 # Schema for the recipe JSON structure
-SCHEMA = {"@context": "https://schema.org", "@type": "Recipe"}
-
+SCHEMA: Dict[str, str] = {"@context": "https://schema.org", "@type": "Recipe"}
 
 @dataclass
 class RecipeForCookBook:
@@ -43,14 +43,14 @@ class RecipeForCookBook:
     cookTime: str = ""
     totalTime: str = ""
     recipeCategory: str = ""
-    keywords: list[str] = field(default_factory=list)
-    tool: list[str] = field(default_factory=list)
-    recipeIngredient: list[str] = field(default_factory=list)
-    recipeInstructions: list[dict] = field(default_factory=list)
-    nutrition: dict[str] = field(default_factory=dict)
+    keywords: List[str] = field(default_factory=list)
+    tool: List[str] = field(default_factory=list)
+    recipeIngredient: List[str] = field(default_factory=list)
+    recipeInstructions: List[dict] = field(default_factory=list)
+    nutrition: Dict[str, str] = field(default_factory=dict)
     datePublished: str = ""
 
-    def to_json(self):
+    def to_json(self) -> Dict[str, str]:
         """
         Converts the recipe object to a JSON-compatible dictionary.
 
@@ -79,15 +79,13 @@ class RecipeForCookBook:
         """
         return self.name.lower().replace(" ", "_").replace("/", "-")
 
-
 class AbstractRecipeParser(ABC):
-    """    Abstract base class for recipe parsers.
+    """
+    Abstract base class for recipe parsers.
     This class defines the interface for parsing recipes from an AbstractScraper object.
-    Attributes:
-        recipe (AbstractScraper): The recipe scraper object containing raw recipe data.
     """
 
-    HEADERS = {}
+    HEADERS: Dict[str, str] = {}
 
     def __init__(self, recipe: AbstractScraper):
         """
@@ -98,7 +96,7 @@ class AbstractRecipeParser(ABC):
         self.recipe = recipe
 
     @abstractmethod
-    def parse_recipe(self) -> RecipeForCookBook:
+    def parse_recipe(self) -> 'RecipeForCookBook':
         """
         Parses a recipe from an AbstractScraper object.
 
@@ -107,27 +105,21 @@ class AbstractRecipeParser(ABC):
         """
         raise NotImplementedError("This method should be implemented by subclasses.")
 
-
 class DefaultRecipeParser(AbstractRecipeParser):
-    """    Default parser for recipes.
-    Inherits from RecipeParser and implements the parse_recipe method.
-    """
+    """Default parser for recipes."""
 
-    HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0",
-    }  # HTTP headers for web requests
+    # Reasonable default UA so trivial bot-blocks don’t trigger on unknown hosts.
+    HEADERS: Dict[str, str] = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) "
+            "Gecko/20100101 Firefox/139.0"
+        ),
+    }
 
-    def parse_recipe(self) -> RecipeForCookBook:
+    def parse_recipe(self) -> 'RecipeForCookBook':
         """
         Parses a recipe from an AbstractScraper object.
         Extracts relevant data and formats it into a `RecipeForCookBook` object.
-        This method retrieves various attributes from the recipe object and constructs a `RecipeForCookBook` instance.
-        It includes the recipe's name, author, yield, description, URL, image, times, category, keywords,
-        tools, ingredients, instructions, nutrition, and publication date.
-        The method also handles optional attributes like cuisine and dietary restrictions.
-        It does not include tools or yield in the default implementation, as these are specific to certain parsers.
-
-        :return: A `RecipeForCookBook` object containing the parsed recipe data.
         """
         cookbook_recipe = RecipeForCookBook(
             name=self.recipe.title(),
@@ -143,23 +135,28 @@ class DefaultRecipeParser(AbstractRecipeParser):
             keywords=self.recipe.keywords() + self.recipe.dietary_restrictions(),
             tool=[],
             recipeIngredient=self.recipe.ingredients(),
-            recipeInstructions=self.recipe.schema.data.get('recipeInstructions', []),
+            recipeInstructions=self.recipe.schema.data.get("recipeInstructions", []),
             nutrition=self.recipe.nutrients(),
-            datePublished=self.recipe.schema.data.get("datePublished", "")
+            datePublished=self.recipe.schema.data.get("datePublished", ""),
         )
-        if self.recipe.cuisine():
-            cookbook_recipe.keywords.append(self.recipe.cuisine())
+        try:
+            cuisine = self.recipe.cuisine()
+        except Exception:
+            cuisine = None
+        if cuisine:
+            cookbook_recipe.keywords.append(cuisine)
 
         return cookbook_recipe
 
-
 class AlbertHeijnRecipeParser(DefaultRecipeParser):
-    """    Parser for Albert Heijn recipes.
-    Inherits from RecipeParser and implements the parse_recipe method.
-    """
+    """Parser for Albert Heijn recipes."""
 
-    HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0",
+    # Headers closely matching a real Firefox request (helps prevent 403).
+    HEADERS: Dict[str, str] = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) "
+            "Gecko/20100101 Firefox/122.0"
+        ),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "nl,en-US;q=0.7,en;q=0.3",
         "Accept-Encoding": "gzip, deflate, br, zstd",
@@ -172,53 +169,46 @@ class AlbertHeijnRecipeParser(DefaultRecipeParser):
         "Sec-GPC": "1",
         "Priority": "u=0, i",
         "Pragma": "no-cache",
-        "Cache-Control": "no-cache"
+        "Cache-Control": "no-cache",
     }
 
-    def parse_recipe(self) -> RecipeForCookBook:
+    def parse_recipe(self) -> 'RecipeForCookBook':
         """
         Parses a recipe from an Albert Heijn recipe scraper object.
         Extracts relevant data and formats it into a `RecipeForCookBook` object.
-
-        Returns:
-            RecipeForCookBook: A formatted recipe object ready for saving.
         """
         cookbook_recipe = super().parse_recipe()
-        apps = self.recipe.soup.find_all("ul", {"data-testhook": "appliances"})  # Find all tools needed for recipe
-        cookbook_recipe.tool = [a.string for a in apps if a.string]  # Extract tool names from the found elements
-        cookbook_recipe.recipeYield = int(self.recipe.yields().strip(" servings"))  # Convert yield str to integer
+        # Tool list (appliances) – be defensive if soup is missing.
+        try:
+            apps = self.recipe.soup.find_all("ul", {"data-testhook": "appliances"})
+            cookbook_recipe.tool = [a.string for a in apps if getattr(a, "string", None)]
+        except Exception:
+            cookbook_recipe.tool = []
+        # Yields might be "4 porties" / "4 servings" -> coerce to int if possible
+        try:
+            y = self.recipe.yields()
+            if isinstance(y, str):
+                num = y.split()[0]
+                cookbook_recipe.recipeYield = int(num)
+        except Exception:
+            pass
         return cookbook_recipe
 
-
-HOST_PARSER_MAPPING: dict[str, type[AbstractRecipeParser]] = {
+HOST_PARSER_MAPPING: Dict[str, type[AbstractRecipeParser]] = {
     "www.ah.nl": AlbertHeijnRecipeParser,
 }
 
-
 def get_proper_parser(url: str) -> type[AbstractRecipeParser]:
-    """    Returns the appropriate parser class for the given URL based on its host.
-    Args:
-        url (str): The URL for which to get the parser.
-    Returns:
-        type[AbstractRecipeParser]: The parser class to use for the request.
     """
-    host = urlparse(url).hostname
-    if host not in HOST_PARSER_MAPPING:
-        print(f"{host} is not yet known, using default parser.")
-        return DefaultRecipeParser
-    else:
-        parser = HOST_PARSER_MAPPING[host]
-        print(f"Using {HOST_PARSER_MAPPING[host].__name__} for {host}")
-        return parser
-
+    Returns the appropriate parser class for the given URL based on its host.
+    """
+    host = urlparse(url).hostname or ""
+    return HOST_PARSER_MAPPING.get(host, DefaultRecipeParser)
 
 def parse_recipe(recipe: AbstractScraper) -> RecipeForCookBook:
-    """    Parses a recipe using the appropriate parser based on the recipe's host.
-    Args:
-        recipe (AbstractScraper): The recipe scraper object containing raw recipe data.
-    Returns:
-        RecipeForCookBook: A formatted recipe object ready for saving.
     """
-    parser = get_proper_parser(recipe.url)  # Ensure the parser is set up for the recipe's host
-    recipe_parser = parser(recipe=recipe)
+    Parses a recipe using the appropriate parser based on the recipe's host.
+    """
+    parser_class = get_proper_parser(recipe.url)
+    recipe_parser = parser_class(recipe=recipe)
     return recipe_parser.parse_recipe()
