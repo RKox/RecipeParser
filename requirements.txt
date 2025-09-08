@@ -1,5 +1,6 @@
 requests==2.32.3
 recipe-scrapers==15.7.1
+requests-html==0.10.0
 urlextract==1.9.0
 pytest==8.3.5
 netifaces2==0.0.22

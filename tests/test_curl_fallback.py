@@ -16,6 +16,7 @@ def test_fallback_to_curl_on_403(mock_get, mock_parser, tmp_path: Path):
     # First call returns a response that raises for status with 403.
     resp = MagicMock()
     resp.status_code = 403
+
     def _raise():
         from requests import HTTPError
         raise HTTPError(response=resp)
