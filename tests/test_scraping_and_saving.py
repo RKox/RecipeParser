@@ -1,3 +1,4 @@
+# pragma: no cover
 import shutil
 import unittest
 from contextlib import contextmanager
