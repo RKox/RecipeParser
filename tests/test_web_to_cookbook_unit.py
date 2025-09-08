@@ -51,12 +51,16 @@ def test_get_new_session_uses_cookiejar(tmp_path, monkeypatch):
             from requests.cookies import RequestsCookieJar
 
             self.cookies = RequestsCookieJar()
+
         def mount(self, *a, **k):
             pass
+
         def close(self):
             pass
+
         def __enter__(self):
             return self
+
         def __exit__(self, exc_type, exc, tb):
             self.close()
     monkeypatch.setattr(wtc, "HTMLSession", DummySession)
@@ -78,13 +82,18 @@ def test_get_new_session_creates_cookiejar(tmp_path, monkeypatch):
     class DummySession:
         def __init__(self):
             from requests.cookies import RequestsCookieJar
+
             self.cookies = RequestsCookieJar()
+
         def mount(self, *a, **k):
             pass
+
         def close(self):
             pass
+
         def __enter__(self):
             return self
+
         def __exit__(self, exc_type, exc, tb):
             self.close()
     monkeypatch.setattr(wtc, "HTMLSession", DummySession)
@@ -129,15 +138,19 @@ def test_save_image_and_json(tmp_path, monkeypatch):
 
     @contextmanager
     def fake_session():
+
         class _S:
             def get(self, url):
                 return SimpleNamespace(content=b"imgdata")
+
             def mount(self, *a, **k):
                 pass
+
             @property
             def cookies(self):
                 from requests.cookies import RequestsCookieJar
                 return RequestsCookieJar()
+
         yield _S()
     monkeypatch.setattr(obj, "_get_new_session", fake_session)
 
@@ -158,10 +171,12 @@ def test_save_scraped_recipe_flow(tmp_path, monkeypatch):
     recipe = wtc.RecipeForCookBook(name="Salad", recipeYield=1, image="http://img")
     monkeypatch.setattr(wtc, "parse_recipe", lambda recipe: recipe)
     container.raw_recipe = recipe
+
     def fake_create(recipe_container):
         path = tmp_path / "salad"
         path.mkdir()
         return path
+
     monkeypatch.setattr(obj, "_create_target_folder", fake_create)
     monkeypatch.setattr(obj, "_get_and_save_image", lambda recipe_container: None)
     obj._save_scraped_recipe(container)
@@ -219,19 +234,25 @@ def test_get_html_from_url_success(tmp_path, monkeypatch):
     class Resp:
         status_code = 200
         content = b"html"
+
         def raise_for_status(self):
             return None
+
     @contextmanager
     def fake_session():
+
         class S:
             def get(self, url, headers=None, allow_redirects=False):
                 return Resp()
+
             def mount(self, *a, **k):
                 pass
+
             @property
             def cookies(self):
                 from requests.cookies import RequestsCookieJar
                 return RequestsCookieJar()
+
         yield S()
     monkeypatch.setattr(obj, "_get_new_session", fake_session)
     html = obj._get_html_from_url("http://example.com")
@@ -242,22 +263,29 @@ def test_get_html_from_url_http_error(tmp_path, monkeypatch):
     from requests import HTTPError
     obj = wtc.URLToCookbook(url_list=["http://a"], target_folder=tmp_path)
     monkeypatch.setattr(wtc, "get_proper_parser", lambda url: type("P", (), {"HEADERS": {}}))
+
     class Resp:
         status_code = 500
         content = b""
+
         def raise_for_status(self):
             raise HTTPError(response=self)
+
     @contextmanager
     def fake_session():
+
         class S:
             def get(self, url, headers=None, allow_redirects=False):
                 return Resp()
+
             def mount(self, *a, **k):
                 pass
+
             @property
             def cookies(self):
                 from requests.cookies import RequestsCookieJar
                 return RequestsCookieJar()
+
         yield S()
     monkeypatch.setattr(obj, "_get_new_session", fake_session)
     with pytest.raises(HTTPError):
@@ -289,9 +317,10 @@ def test_web_to_cookbook_failure_cleans(tmp_path, monkeypatch):
 # -------- run_through_htmls ---------
 
 def test_run_through_htmls_collects_exceptions(tmp_path, monkeypatch):
-    obj = wtc.URLToCookbook(url_list=["http://a"], html_list=["<h>"] , target_folder=tmp_path)
+    obj = wtc.URLToCookbook(url_list=["http://a"], html_list=["<h>"], target_folder=tmp_path)
     failing = wtc.RecipeContainer(source=wtc.Source.html, source_content="bad")
     obj._source_recipes.add(failing)
+
     def side_effect(recipe_container):
         if recipe_container.source_content == "bad":
             raise ValueError("boom")
@@ -328,6 +357,7 @@ def test_run_through_urls_with_retry(tmp_path, monkeypatch):
     obj = wtc.URLToCookbook(url_list=["http://a"], target_folder=tmp_path)
     container = next(iter(obj._source_recipes))
     attempts = {"n": 0}
+
     def fake_run():
         attempts["n"] += 1
         if attempts["n"] == 1:
@@ -371,11 +401,14 @@ def test_main_block_executes(tmp_path, monkeypatch):
     )
 
     class DummyURLToCookbook:
+
         def __init__(self, url_list, html_list, target_folder, interface):
             self.url_list = url_list
             self.html_list = html_list
+
         def run_through_urls_with_retry(self, retries):
             pass
+
         def run_through_htmls(self):
             pass
 
@@ -394,7 +427,9 @@ def test_update_failed_urls_file(tmp_path, monkeypatch):
     containers["http://good"].success = True
     file_path = tmp_path / "failed.txt"
     file_path.write_text("http://old\nhttp://good")
+
     class Extractor:
+
         def find_urls(self, text):
             return [u for u in text.split() if u.startswith("http")]
     monkeypatch.setattr(wtc, "URLExtract", lambda: Extractor())
@@ -408,7 +443,9 @@ def test_update_failed_urls_file(tmp_path, monkeypatch):
 def test_get_urls_from_file(tmp_path, monkeypatch):
     file = tmp_path / "urls.txt"
     file.write_text("one http://a.com two http://b.com")
+
     class Extractor:
+
         def find_urls(self, text):
             return [u for u in text.split() if u.startswith("http")]
     monkeypatch.setattr(wtc, "URLExtract", lambda: Extractor())
