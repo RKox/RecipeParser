@@ -194,6 +194,7 @@ class AlbertHeijnRecipeParser(DefaultRecipeParser):
             pass
         return cookbook_recipe
 
+
 HOST_PARSER_MAPPING: Dict[str, type[AbstractRecipeParser]] = {
     "www.ah.nl": AlbertHeijnRecipeParser,
 }

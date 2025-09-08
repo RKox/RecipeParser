@@ -12,8 +12,10 @@ import pickle
 
 import netifaces
 from bs4 import BeautifulSoup
-from requests import Session
+import requests
+from requests import Session, HTTPError
 from requests.adapters import HTTPAdapter
+from curl_cffi import requests as curl_requests
 from recipe_scrapers import scrape_html, AbstractScraper
 import json
 from pathlib import Path
@@ -256,7 +258,14 @@ class URLToCookbook(HTMLToCookbook):
         with self._get_new_session() as session:
             res = session.get(url, headers=headers, allow_redirects=False)
 
-        res.raise_for_status()
+        try:
+            res.raise_for_status()
+        except HTTPError:
+            if res.status_code == 403:
+                curl_res = curl_requests.get(url, headers=headers, allow_redirects=False)
+                curl_res.raise_for_status()
+                return curl_res.text
+            raise
         return res.content.decode("utf-8")
 
     def web_to_cookbook(self, recipe_container: RecipeContainer):
