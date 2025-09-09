@@ -7,3 +7,4 @@ netifaces2==0.0.22
 pytest-cov==5.0.0
 flake8==7.1.1
 curl-cffi==0.13.0
+watchdog==4.0.0

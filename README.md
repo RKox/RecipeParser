@@ -84,6 +84,41 @@ py web_to_cookbook.py -u https://example.com -i "Wi-Fi"
 
 The script creates a subdirectory for each recipe inside the target folder containing `recipe.json` and `full.jpg`.
 
+## Background folder watcher
+You can process recipes automatically by watching a directory for new files. Each
+file should either contain a single URL or a block of HTML. New files are parsed
+and passed to `web_to_cookbook.py` automatically.
+
+### Run directly
+```bash
+python watch_folder.py /path/to/incoming /path/to/parsed_recipes
+```
+
+### Using systemd (Linux)
+Create `/etc/systemd/system/recipe-watcher.service`:
+
+```ini
+[Unit]
+Description=Watch a folder and parse recipes
+
+[Service]
+Type=simple
+ExecStart=/path/to/watch_folder.sh /path/to/incoming /path/to/parsed_recipes
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start the service:
+
+```bash
+sudo systemctl enable --now recipe-watcher.service
+```
+
+On Windows or macOS you can run `watch_folder.py` using a similar startup
+mechanism such as Task Scheduler or `launchd`.
+
 ## Running tests
 To ensure the project works correctly after changes, run:
 ```bash
