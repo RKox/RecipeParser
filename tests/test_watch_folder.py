@@ -17,7 +17,7 @@ def test_process_file_url(tmp_path, monkeypatch):
     monkeypatch.setattr(wtc, "URLToCookbook", DummyURL)
 
     file_path = tmp_path / "url.txt"
-    file_path.write_text("http://example.com")
+    file_path.write_text("link: http://example.com end")
 
     watch_folder.process_file(file_path, tmp_path)
 
@@ -46,6 +46,27 @@ def test_process_file_html(tmp_path, monkeypatch):
     assert called["run"]
 
 
+def test_process_file_multiple_urls(tmp_path, monkeypatch):
+    called = {}
+
+    class DummyURL:
+        def __init__(self, url_list, target_folder, interface=""):
+            called["url_list"] = url_list
+
+        def run_through_urls(self):
+            called["run"] = True
+
+    monkeypatch.setattr(wtc, "URLToCookbook", DummyURL)
+
+    file_path = tmp_path / "urls.txt"
+    file_path.write_text("one http://example.com two https://foo.bar")
+
+    watch_folder.process_file(file_path, tmp_path)
+
+    assert called["url_list"] == ["http://example.com", "https://foo.bar"]
+    assert called["run"]
+
+
 def test_watch_directory(tmp_path, monkeypatch):
     called = {}
 
@@ -67,7 +88,7 @@ def test_watch_directory(tmp_path, monkeypatch):
 
     try:
         file_path = watch_dir / "url.txt"
-        file_path.write_text("http://example.com")
+        file_path.write_text("here: http://example.com")
         # wait for the observer to pick up the event
         for _ in range(10):
             if called.get("run"):
