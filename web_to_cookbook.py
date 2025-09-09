@@ -367,6 +367,28 @@ def get_urls_from_file(url_file: Path) -> list[str]:
     return urls
 
 
+def process_text(text: str, target_folder: Path, interface: str = "") -> None:
+    """Process a string containing either a URL or raw HTML.
+
+    The function inspects *text* to determine whether it contains HTML. If
+    ``<html`` is present (case-insensitive), the text is treated as raw HTML
+    and passed to :class:`HTMLToCookbook`. Otherwise the text is assumed to be
+    a single URL and routed to :class:`URLToCookbook`.
+
+    :param text: Source string with either a URL or HTML markup.
+    :param target_folder: Destination folder for the parsed recipe output.
+    :param interface: Optional network interface for outbound requests.
+    """
+
+    text = text.strip()
+    if "<html" in text.lower():
+        parser = HTMLToCookbook(html_list=[text], target_folder=target_folder, interface=interface)
+        parser.run_through_htmls()
+    else:
+        parser = URLToCookbook(url_list=[text], target_folder=target_folder, interface=interface)
+        parser.run_through_urls()
+
+
 if __name__ == "__main__":
     # Command-line argument parser for recipe URLs and files containing URLs
     parser = argparse.ArgumentParser(description="Scrape recipes from URLs or files containing URLs.")
