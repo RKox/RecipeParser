@@ -7,19 +7,14 @@ import web_to_cookbook as wtc
 
 
 def process_file(file_path: Path, target_folder: Path, interface: str = "") -> None:
-    """Process a file that contains either a URL or raw HTML.
+    """Process a file containing a recipe URL or raw HTML.
 
-    If the file text contains ``<html`` it is treated as HTML and passed to
-    :class:`web_to_cookbook.HTMLToCookbook`. Otherwise the content is assumed to
-    be a URL and handled by :class:`web_to_cookbook.URLToCookbook`.
+    The file's text content is forwarded to :func:`web_to_cookbook.process_text`
+    which handles dispatching to the appropriate parser based on whether the
+    content looks like HTML or a URL.
     """
-    text = file_path.read_text(encoding="utf-8").strip()
-    if "<html" in text.lower():
-        parser = wtc.HTMLToCookbook(html_list=[text], target_folder=target_folder, interface=interface)
-        parser.run_through_htmls()
-    else:
-        parser = wtc.URLToCookbook(url_list=[text], target_folder=target_folder, interface=interface)
-        parser.run_through_urls()
+    text = file_path.read_text(encoding="utf-8")
+    wtc.process_text(text, target_folder, interface)
 
 
 class RecipeFileHandler(FileSystemEventHandler):
